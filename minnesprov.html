@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10 föremål – minnesprov</title>
+<style>
+  :root{
+    --bg:#bfe8ff;
+    --panel:#ffffff;
+    --ink:#17324d;
+    --accent:#1769aa;
+    --danger:#b42318;
+    --muted:#5c7184;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:Arial,Helvetica,sans-serif;
+    color:var(--ink);
+    background:var(--bg);
+  }
+  header{
+    padding:18px 22px;
+    background:rgba(255,255,255,.78);
+    border-bottom:1px solid rgba(23,50,77,.12);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+  }
+  h1{font-size:22px;margin:0}
+  main{max-width:1200px;margin:0 auto;padding:22px}
+  .panel{
+    background:var(--panel);
+    border-radius:16px;
+    padding:22px;
+    box-shadow:0 5px 24px rgba(23,50,77,.12);
+    margin-bottom:18px;
+  }
+  .hidden{display:none!important}
+  button{
+    border:0;
+    border-radius:10px;
+    padding:12px 18px;
+    font-size:16px;
+    font-weight:700;
+    cursor:pointer;
+    background:var(--accent);
+    color:white;
+    margin:5px 5px 5px 0;
+  }
+  button.secondary{background:#e7eef4;color:var(--ink)}
+  button.danger{background:var(--danger)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  input,select{
+    width:100%;
+    padding:11px;
+    border:1px solid #b9c8d4;
+    border-radius:9px;
+    font-size:16px;
+    margin-top:6px;
+  }
+  label{display:block;font-weight:700;margin:12px 0}
+  .small{color:var(--muted);font-size:14px}
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin:15px 0}
+  .stat{padding:10px 13px;background:#eef7fd;border-radius:9px}
+  .exam-head{
+    display:flex;justify-content:space-between;align-items:center;gap:15px;
+    margin-bottom:12px;flex-wrap:wrap
+  }
+  .timer{font-size:28px;font-weight:800}
+  #objectCanvas{
+    position:relative;
+    width:100%;
+    height:min(70vh,720px);
+    min-height:480px;
+    overflow:hidden;
+    border-radius:14px;
+    background:#bfe8ff;
+    border:2px solid rgba(23,50,77,.16);
+  }
+  .obj{
+    position:absolute;
+    transform:translate(-50%,-50%);
+    user-select:none;
+  }
+  /* Simple SVG-like objects drawn with CSS */
+  .obj svg{display:block;filter:drop-shadow(2px 3px 1px rgba(0,0,0,.14))}
+  .memory-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px;
+    margin-top:15px;
+  }
+  .choice{
+    background:#f6f9fb;
+    color:var(--ink);
+    border:2px solid #d4e0e8;
+    min-height:90px;
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;
+  }
+  .choice.selected{border-color:var(--accent);background:#e5f3ff}
+  .choice svg{width:58px;height:58px}
+  .results table{width:100%;border-collapse:collapse}
+  .results th,.results td{padding:9px;border-bottom:1px solid #d9e1e7;text-align:left}
+  .scroll{overflow:auto}
+  .success{padding:12px;background:#eaf7ed;border:1px solid #b9dfc0;border-radius:9px}
+  .warning{padding:12px;background:#fff7df;border:1px solid #ead79a;border-radius:9px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:750px){.two{grid-template-columns:1fr} #objectCanvas{min-height:400px;height:60vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>10 föremål – minnesprov</h1>
+  <div id="modeLabel" class="small">Deltagarläge</div>
+</header>
+
+<main>
+  <section id="home" class="panel">
+    <h2>Starta ett prov</h2>
+    <p>Programmet skapar en ny slumpad bild med 10 olika, enkelt ritade vardagsföremål. Bilden visas i högst 5 minuter.</p>
+    <label>Deltagar-ID / kod (valfritt)
+      <input id="participantId" placeholder="Exempel: P001">
+    </label>
+    <button onclick="startExam()">Starta nytt slumpat prov</button>
+    <button class="secondary" onclick="showAdmin()">Öppna resultat / administration</button>
+    <p class="small">Tips: använd ett eget deltagar-ID för varje person så att du kan koppla resultat till rätt person.</p>
+  </section>
+
+  <section id="memorize" class="panel hidden">
+    <div class="exam-head">
+      <div>
+        <h2>Memorera bilden</h2>
+        <div class="small">Prov-ID: <strong id="examIdLabel"></strong></div>
+      </div>
+      <div class="timer" id="timer">05:00</div>
+    </div>
+    <div class="warning">Du får titta på bilden i högst 5 minuter. När tiden är slut försvinner den automatiskt.</div>
+    <div id="objectCanvas" aria-label="Slumpad bild med tio föremål"></div>
+    <button class="danger" onclick="finishMemorize()">Jag är klar – dölj bilden</button>
+  </section>
+
+  <section id="recall" class="panel hidden">
+    <h2>Återgivning</h2>
+    <p>Välj de <strong>10 föremål</strong> som du minns fanns i bilden. Ordningen spelar ingen roll.</p>
+    <div id="choiceGrid" class="memory-grid"></div>
+    <p>Valda: <strong id="selectedCount">0</strong> / 10</p>
+    <button onclick="submitRecall()">Skicka svar</button>
+  </section>
+
+  <section id="done" class="panel hidden">
+    <h2>Resultatet är sparat</h2>
+    <div id="scoreText" class="success"></div>
+    <p class="small">Prov-ID: <strong id="doneExamId"></strong>. Du kan nu lämna över till nästa deltagare.</p>
+    <button onclick="resetToHome()">Nytt prov</button>
+    <button class="secondary" onclick="showAdmin()">Visa administration</button>
+  </section>
+
+  <section id="admin" class="panel hidden">
+    <h2>Administration</h2>
+    <p>Alla prov sparas i denna webbläsares lokala lagring. Exportera CSV regelbundet om du vill ha en separat säker kopia.</p>
+    <div class="stats">
+      <div class="stat">Antal prov: <strong id="examCount">0</strong></div>
+      <div class="stat">Antal objekt: <strong>10 per prov</strong></div>
+    </div>
+    <button onclick="exportCSV()">Exportera resultat som CSV</button>
+    <button class="secondary" onclick="exportJSON()">Exportera komplett data som JSON</button>
+    <button class="secondary" onclick="resetToHome()">Till deltagarläge</button>
+    <button class="danger" onclick="clearAllData()">Radera all lokalt sparad data</button>
+    <div class="results scroll" style="margin-top:18px">
+      <table>
+        <thead>
+          <tr>
+            <th>Prov-ID</th><th>Deltagare</th><th>Datum</th><th>Poäng</th><th>Visning</th><th>Föremål</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+/*
+  GRATIS, FRISTÅENDE VERSION
+  - Ingen server krävs.
+  - Ingen inloggning krävs.
+  - All data sparas i webbläsarens localStorage.
+  - Exportera CSV/JSON för att säkerhetskopiera.
+*/
+
+const STORAGE_KEY = "minnesprov_v1";
+let currentExam = null;
+let timerInterval = null;
+let selected = new Set();
+
+const OBJECTS = [
+  {id:"cykel", name:"Cykel", color:"#e53935", svg:`<svg viewBox="0 0 140 90" width="130" height="85">
+    <circle cx="30" cy="65" r="20" fill="none" stroke="currentColor" stroke-width="7"/>
+    <circle cx="108" cy="65" r="20" fill="none" stroke="currentColor" stroke-width="7"/>
+    <path d="M30 65 L53 32 L77 65 L30 65 M53 32 L67 65 M53 32 L48 20 L64 20 M77 65 L90 40 L108 65 M90 40 L102 40" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`},
+  {id:"basketboll", name:"Basketboll", color:"#f57c00", svg:`<svg viewBox="0 0 100 100" width="95" height="95"><circle cx="50" cy="50" r="40" fill="currentColor"/><path d="M13 39 Q50 53 87 39 M13 61 Q50 47 87 61 M50 10 Q37 50 50 90 M50 10 Q63 50 50 90" fill="none" stroke="#fff" stroke-width="4"/></svg>`},
+  {id:"fotboll", name:"Fotboll", color:"#fff", svg:`<svg viewBox="0 0 100 100" width="95" height="95"><circle cx="50" cy="50" r="40" fill="#fff" stroke="#333" stroke-width="3"/><polygon points="50,25 62,34 57,48 43,48 38,34" fill="#333"/><path d="M38 34L22 25M62 34L78 25M43 48L31 64M57 48L69 64M50 25V12M31 64L33 82M69 64L67 82" stroke="#333" stroke-width="4" fill="none"/></svg>`},
+  {id:"kopp", name:"Kaffekopp", color:"#6d4c41", svg:`<svg viewBox="0 0 110 100" width="105" height="95"><path d="M18 27 H82 V66 Q82 80 68 82 H32 Q18 80 18 66Z" fill="currentColor"/><path d="M82 39 H91 Q103 39 103 51 Q103 63 91 63 H82" fill="none" stroke="currentColor" stroke-width="8"/><path d="M35 16 Q28 8 35 1 M53 16 Q46 8 53 1 M71 16 Q64 8 71 1" fill="none" stroke="#999" stroke-width="4"/></svg>`},
+  {id:"paraply", name:"Paraply", color:"#7e57c2", svg:`<svg viewBox="0 0 120 120" width="110" height="110"><path d="M15 55 Q60 12 105 55 Q90 48 78 59 Q65 47 60 59 Q47 47 34 59 Q27 49 15 55Z" fill="currentColor"/><path d="M60 55 V94 Q60 106 49 106 Q40 106 40 97" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/></svg>`},
+  {id:"nyckel", name:"Nyckel", color:"#d4a72c", svg:`<svg viewBox="0 0 130 90" width="125" height="85"><circle cx="32" cy="45" r="22" fill="none" stroke="currentColor" stroke-width="10"/><circle cx="32" cy="45" r="7" fill="#bfe8ff"/><path d="M50 45 H112 L112 32 M91 45 V58" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="square"/></svg>`},
+  {id:"bok", name:"Bok", color:"#1565c0", svg:`<svg viewBox="0 0 120 100" width="115" height="95"><path d="M12 18 Q38 12 60 25 V86 Q38 73 12 80Z" fill="currentColor"/><path d="M108 18 Q82 12 60 25 V86 Q82 73 108 80Z" fill="#43a047"/><path d="M60 25V86" stroke="#333" stroke-width="3"/></svg>`},
+  {id:"ryggsack", name:"Ryggsäck", color:"#00897b", svg:`<svg viewBox="0 0 100 120" width="90" height="110"><path d="M27 34 Q27 15 50 15 Q73 15 73 34 L83 42 V101 Q83 108 76 108 H24 Q17 108 17 101 V42Z" fill="currentColor"/><path d="M30 51 H70 V72 H30Z" fill="#fff" opacity=".8"/><path d="M27 36 Q12 42 20 62 M73 36 Q88 42 80 62" fill="none" stroke="currentColor" stroke-width="8"/></svg>`},
+  {id:"klocka", name:"Armbandsur", color:"#455a64", svg:`<svg viewBox="0 0 90 120" width="85" height="110"><path d="M35 25V5H55V25M35 95V115H55V95" fill="currentColor"/><rect x="20" y="22" width="50" height="76" rx="18" fill="#78909c"/><circle cx="45" cy="60" r="19" fill="#fff"/><path d="M45 60V47M45 60L55 66" stroke="#333" stroke-width="4"/></svg>`},
+  {id:"solglasogon", name:"Solglasögon", color:"#263238", svg:`<svg viewBox="0 0 140 80" width="130" height="75"><circle cx="38" cy="43" r="25" fill="currentColor"/><circle cx="102" cy="43" r="25" fill="currentColor"/><path d="M63 40 Q70 34 77 40 M13 31 L5 22 M127 31 L135 22" fill="none" stroke="currentColor" stroke-width="7"/></svg>`},
+  {id:"apple", name:"Äpple", color:"#d32f2f", svg:`<svg viewBox="0 0 100 110" width="90" height="100"><path d="M50 31 Q25 16 15 40 Q6 67 30 91 Q50 106 70 91 Q94 67 85 40 Q75 16 50 31Z" fill="currentColor"/><path d="M50 29 Q52 12 67 8" fill="none" stroke="#5d4037" stroke-width="6"/><path d="M59 17 Q72 10 78 18 Q67 23 59 17" fill="#43a047"/></svg>`},
+  {id:"banan", name:"Banan", color:"#fdd835", svg:`<svg viewBox="0 0 130 90" width="125" height="85"><path d="M15 20 Q40 75 105 62 Q113 60 118 51 Q108 76 77 80 Q35 85 10 32Z" fill="currentColor" stroke="#8d6e63" stroke-width="4"/></svg>`},
+  {id:"sked", name:"Sked", color:"#b0bec5", svg:`<svg viewBox="0 0 100 130" width="90" height="115"><ellipse cx="50" cy="29" rx="25" ry="25" fill="currentColor"/><rect x="45" y="50" width="10" height="67" rx="5" fill="currentColor"/></svg>`},
+  {id:"keps", name:"Keps", color:"#1976d2", svg:`<svg viewBox="0 0 130 90" width="125" height="85"><path d="M25 48 Q30 20 58 20 Q85 20 94 48Z" fill="currentColor"/><path d="M25 48 Q65 42 120 55 Q90 70 25 58Z" fill="currentColor"/></svg>`},
+  {id:"sko", name:"Sko", color:"#8d6e63", svg:`<svg viewBox="0 0 140 100" width="130" height="90"><path d="M18 65 Q45 61 57 37 L74 48 Q83 62 105 67 Q122 70 128 82 Q130 90 117 92 H23 Q10 89 18 65Z" fill="currentColor"/><path d="M61 48 L90 67" stroke="#fff" stroke-width="4"/></svg>`},
+  {id:"nalle", name:"Nalle", color:"#a1887f", svg:`<svg viewBox="0 0 100 120" width="90" height="110"><circle cx="27" cy="25" r="13" fill="currentColor"/><circle cx="73" cy="25" r="13" fill="currentColor"/><circle cx="50" cy="57" r="31" fill="currentColor"/><circle cx="50" cy="87" r="24" fill="currentColor"/><circle cx="39" cy="54" r="4"/><circle cx="61" cy="54" r="4"/><ellipse cx="50" cy="64" rx="9" ry="7" fill="#fff"/></svg>`},
+  {id:"tandborste", name:"Tandborste", color:"#26a69a", svg:`<svg viewBox="0 0 150 70" width="140" height="65"><rect x="25" y="29" width="110" height="13" rx="7" fill="currentColor"/><rect x="13" y="22" width="24" height="27" rx="5" fill="currentColor"/><path d="M13 22 V8 M20 22 V5 M27 22 V8 M34 22 V10" stroke="#333" stroke-width="5"/></svg>`},
+  {id:"penna", name:"Penna", color:"#3949ab", svg:`<svg viewBox="0 0 150 60" width="140" height="55"><path d="M12 30 L115 12 L137 30 L115 48Z" fill="currentColor"/><path d="M137 30 L148 30 L137 34Z" fill="#777"/><rect x="25" y="23" width="35" height="14" fill="#fff" opacity=".7"/></svg>`},
+  {id:"kamera", name:"Kamera", color:"#37474f", svg:`<svg viewBox="0 0 120 90" width="110" height="85"><rect x="10" y="25" width="100" height="55" rx="9" fill="currentColor"/><path d="M30 25 L38 14 H68 L76 25" fill="currentColor"/><circle cx="60" cy="52" r="20" fill="#90a4ae"/><circle cx="60" cy="52" r="11" fill="#263238"/></svg>`},
+  {id:"gitarr", name:"Gitarr", color:"#ef6c00", svg:`<svg viewBox="0 0 150 100" width="140" height="90"><path d="M95 42 Q118 18 135 30 L142 23 L148 29 L141 36 Q153 55 127 65 Q108 72 94 57Z" fill="currentColor"/><path d="M100 48 L35 77" stroke="#795548" stroke-width="12"/><path d="M28 80 L10 88" stroke="#333" stroke-width="8"/></svg>`},
+  {id:"flaska", name:"Flaska", color:"#0288d1", svg:`<svg viewBox="0 0 80 120" width="75" height="110"><path d="M31 12 H49 V30 Q64 40 64 57 V102 Q64 110 56 110 H24 Q16 110 16 102 V57 Q16 40 31 30Z" fill="currentColor"/><rect x="31" y="5" width="18" height="10" fill="#455a64"/></svg>`},
+  {id:"sax", name:"Sax", color:"#90a4ae", svg:`<svg viewBox="0 0 120 110" width="110" height="100"><circle cx="35" cy="82" r="17" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="85" cy="82" r="17" fill="none" stroke="currentColor" stroke-width="8"/><path d="M38 68 L75 20 M82 68 L45 20" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg>`},
+  {id:"stol", name:"Stol", color:"#795548", svg:`<svg viewBox="0 0 110 120" width="100" height="110"><path d="M22 12 H88 V60 H22Z" fill="currentColor"/><path d="M27 60 L18 108 M83 60 L92 108" stroke="currentColor" stroke-width="9"/></svg>`},
+  {id:"lampa", name:"Lampa", color:"#fbc02d", svg:`<svg viewBox="0 0 120 120" width="110" height="110"><path d="M28 55 H92 L78 20 H42Z" fill="currentColor"/><path d="M60 55 V94 M42 102 H78" stroke="#555" stroke-width="8" stroke-linecap="round"/></svg>`},
+  {id:"telefon", name:"Telefon", color:"#455a64", svg:`<svg viewBox="0 0 80 130" width="75" height="115"><rect x="10" y="5" width="60" height="120" rx="9" fill="currentColor"/><rect x="16" y="18" width="48" height="85" fill="#90caf9"/><circle cx="40" cy="114" r="5" fill="#fff"/></svg>`},
+  {id:"fotbollssko", name:"Sportskor", color:"#c62828", svg:`<svg viewBox="0 0 140 100" width="130" height="90"><path d="M16 62 Q40 62 55 35 L77 45 Q87 61 108 65 Q127 68 132 82 Q133 91 119 92 H22 Q10 89 16 62Z" fill="currentColor"/><path d="M56 45 L87 64" stroke="#fff" stroke-width="5"/></svg>`},
+  {id:"glasögon", name:"Glasögon", color:"#263238", svg:`<svg viewBox="0 0 140 70" width="130" height="65"><circle cx="38" cy="37" r="25" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="102" cy="37" r="25" fill="none" stroke="currentColor" stroke-width="7"/><path d="M63 34 Q70 28 77 34 M13 30 L4 23 M127 30 L136 23" fill="none" stroke="currentColor" stroke-width="7"/></svg>`}
+];
+
+function getData(){
+  try{return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {exams:[]};}
+  catch(e){return {exams:[]};}
+}
+function saveData(data){localStorage.setItem(STORAGE_KEY,JSON.stringify(data));}
+
+function randomId(){
+  return "P-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2,7).toUpperCase();
+}
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+function sample10(){return shuffle(OBJECTS).slice(0,10);}
+
+function startExam(){
+  clearInterval(timerInterval);
+  selected=new Set();
+  const participant=(document.getElementById("participantId").value||"").trim();
+  const chosen=sample10();
+  currentExam={
+    examId:randomId(),
+    participantId:participant || "Ej angivet",
+    createdAt:new Date().toISOString(),
+    objectIds:chosen.map(o=>o.id),
+    viewedSeconds:0,
+    score:null,
+    recalledIds:[]
+  };
+  renderObjects(chosen);
+  document.getElementById("examIdLabel").textContent=currentExam.examId;
+  showOnly("memorize");
+  startTimer(300);
+}
+
+function renderObjects(objects){
+  const canvas=document.getElementById("objectCanvas");
+  canvas.innerHTML="";
+  const w=canvas.clientWidth||900, h=canvas.clientHeight||600;
+  const placed=[];
+  objects.forEach((obj,i)=>{
+    const el=document.createElement("div");
+    el.className="obj";
+    el.innerHTML=obj.svg;
+    el.style.color=obj.color;
+    const size=75+Math.random()*45;
+    el.style.width=size+"px";
+    let x,y,tries=0;
+    do{
+      x=8+Math.random()*84;
+      y=10+Math.random()*80;
+      tries++;
+    }while(placed.some(p=>Math.hypot((x-p.x)*w/100,(y-p.y)*h/100)<115) && tries<150);
+    placed.push({x,y});
+    el.style.left=x+"%";
+    el.style.top=y+"%";
+    el.dataset.objectId=obj.id;
+    canvas.appendChild(el);
+  });
+}
+
+function startTimer(seconds){
+  let remaining=seconds;
+  updateTimer(remaining);
+  timerInterval=setInterval(()=>{
+    remaining--;
+    currentExam.viewedSeconds=seconds-remaining;
+    updateTimer(remaining);
+    if(remaining<=0){
+      clearInterval(timerInterval);
+      finishMemorize();
+    }
+  },1000);
+}
+function updateTimer(sec){
+  const m=Math.floor(sec/60).toString().padStart(2,"0");
+  const s=(sec%60).toString().padStart(2,"0");
+  document.getElementById("timer").textContent=m+":"+s;
+}
+function finishMemorize(){
+  clearInterval(timerInterval);
+  if(currentExam) currentExam.viewedSeconds=Math.min(currentExam.viewedSeconds,300);
+  buildChoices();
+  showOnly("recall");
+}
+
+function buildChoices(){
+  const grid=document.getElementById("choiceGrid");
+  grid.innerHTML="";
+  selected=new Set();
+  const choices=shuffle(OBJECTS);
+  choices.forEach(obj=>{
+    const b=document.createElement("button");
+    b.className="choice";
+    b.type="button";
+    b.innerHTML=obj.svg;
+    b.style.color=obj.color;
+    b.title="Välj föremålet";
+    b.onclick=()=>{
+      if(selected.has(obj.id)){
+        selected.delete(obj.id); b.classList.remove("selected");
+      }else{
+        if(selected.size>=10)return;
+        selected.add(obj.id); b.classList.add("selected");
+      }
+      document.getElementById("selectedCount").textContent=selected.size;
+    };
+    grid.appendChild(b);
+  });
+}
+
+function submitRecall(){
+  if(selected.size!==10){
+    alert("Välj exakt 10 föremål innan du skickar svaret.");
+    return;
+  }
+  const correct=new Set(currentExam.objectIds);
+  let score=0;
+  selected.forEach(id=>{if(correct.has(id))score++;});
+  currentExam.score=score;
+  currentExam.recalledIds=[...selected];
+  const data=getData();
+  data.exams.push(currentExam);
+  saveData(data);
+
+  document.getElementById("scoreText").innerHTML=
+    `<strong>Poäng: ${score} / 10</strong><br>Resultatet och den exakta slumpningen har sparats lokalt.`;
+  document.getElementById("doneExamId").textContent=currentExam.examId;
+  showOnly("done");
+}
+
+function showAdmin(){
+  renderAdmin();
+  showOnly("admin");
+}
+function renderAdmin(){
+  const data=getData();
+  document.getElementById("examCount").textContent=data.exams.length;
+  const body=document.getElementById("resultsBody");
+  body.innerHTML="";
+  [...data.exams].reverse().forEach(e=>{
+    const names=e.objectIds.map(id=>OBJECTS.find(o=>o.id===id)?.name||id).join(", ");
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${escapeHtml(e.examId)}</td>
+      <td>${escapeHtml(e.participantId)}</td>
+      <td>${new Date(e.createdAt).toLocaleString("sv-SE")}</td>
+      <td>${e.score===null?"-":e.score+"/10"}</td>
+      <td>${Math.round((e.viewedSeconds||0)/60*10)/10} min</td>
+      <td>${escapeHtml(names)}</td>`;
+    body.appendChild(tr);
+  });
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+}
+
+function exportCSV(){
+  const data=getData().exams;
+  if(!data.length){alert("Det finns inga sparade prov ännu.");return;}
+  const headers=["Prov-ID","Deltagare","Datum","Poäng","Visning sekunder","Slumpade objekt","Valda objekt"];
+  const rows=[headers,...data.map(e=>[
+    e.examId,e.participantId,e.createdAt,e.score,e.viewedSeconds,
+    e.objectIds.map(id=>OBJECTS.find(o=>o.id===id)?.name||id).join(" | "),
+    (e.recalledIds||[]).map(id=>OBJECTS.find(o=>o.id===id)?.name||id).join(" | ")
+  ])];
+  const csv=rows.map(r=>r.map(csvCell).join(";")).join("\r\n");
+  downloadBlob("\uFEFF"+csv,"minnesprov_resultat.csv","text/csv;charset=utf-8");
+}
+function csvCell(v){return '"'+String(v??"").replace(/"/g,'""')+'"';}
+
+function exportJSON(){
+  const data=getData();
+  if(!data.exams.length){alert("Det finns inga sparade prov ännu.");return;}
+  downloadBlob(JSON.stringify(data,null,2),"minnesprov_backup.json","application/json");
+}
+function downloadBlob(content,name,type){
+  const blob=new Blob([content],{type});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function clearAllData(){
+  if(confirm("Är du säker? ALLA lokalt sparade prov kommer att raderas.")){
+    localStorage.removeItem(STORAGE_KEY);
+    renderAdmin();
+  }
+}
+function resetToHome(){
+  clearInterval(timerInterval);
+  currentExam=null; selected=new Set();
+  document.getElementById("participantId").value="";
+  showOnly("home");
+}
+function showOnly(id){
+  ["home","memorize","recall","done","admin"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));
+  window.scrollTo(0,0);
+}
+
+renderAdmin();
+</script>
+</body>
+</html>
