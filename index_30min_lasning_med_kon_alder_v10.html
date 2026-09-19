@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Minnesprov – 10 föremål</title>
+<style>
+:root{--bg:#bfe8ff;--ink:#17324d;--blue:#1769aa;--white:#fff;--red:#b42318}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,sans-serif}
+header{padding:16px 20px;background:#ffffffdd;border-bottom:1px solid #17324d22}
+main{max-width:1100px;margin:auto;padding:20px}
+.panel{background:#fff;border-radius:16px;padding:20px;box-shadow:0 5px 24px #17324d1c;margin-bottom:18px}
+.hidden{display:none!important}
+textarea{width:100%;box-sizing:border-box;padding:14px;border:2px solid #cfd8e3;border-radius:12px;font:inherit;resize:vertical;min-height:180px;background:#fff}
+.answerbox{margin-top:16px;padding:14px;border:1px solid #d7e0ea;border-radius:12px;background:#f8fbfe;white-space:pre-wrap;line-height:1.5}
+button{border:0;border-radius:10px;padding:12px 18px;font-size:16px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff}
+button.secondary{background:#e7eef4;color:var(--ink)}
+button.danger{background:var(--red)}
+input,select{width:100%;padding:11px;border:1px solid #b9c8d4;border-radius:9px;font-size:16px;margin:7px 0 14px;background:#fff}
+label{font-weight:700;display:block}
+.small{color:#5c7184;font-size:14px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}
+.timer{font-size:30px;font-weight:800}
+#canvas{position:relative;height:min(70vh,720px);min-height:440px;background:#bfe8ff;border:2px solid #17324d28;border-radius:14px;overflow:hidden}
+.object-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(2,1fr);place-items:center;padding:24px 34px}
+.obj{position:relative;transform:none;user-select:none;width:clamp(48px,7vw,74px)}
+.obj svg{display:block;width:100%;height:auto;filter:drop-shadow(2px 3px 1px #00000024)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.choice{background:#f5f9fc;color:var(--ink);border:2px solid #d2dee7;min-height:105px;display:flex;align-items:center;justify-content:center}
+.choice.selected{border-color:var(--blue);background:#e5f3ff}
+.choice svg{width:62px;height:62px}
+.success{padding:14px;border-radius:10px;background:#eaf7ed;border:1px solid #b9dfc0}
+.warning{padding:14px;border-radius:10px;background:#fff7df;border:1px solid #ead79a}
+@media(max-width:650px){main{padding:12px}#canvas{min-height:390px;height:62vh}.object-grid{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(5,1fr);padding:18px 28px}.obj{width:clamp(40px,13vw,54px)}}
+</style>
+</head>
+<body>
+<header><strong>10 föremål – minnesprov</strong></header>
+<main>
+<section id="home" class="panel">
+<h2>Starta prov</h2>
+<p><strong>Du ska genomföra ett minnestest med 10 objekt.</strong></p>
+<p>Skriv in ditt deltagar-ID, kön och ålder. En ny slumpad bild med 10 olika föremål skapas när testet startar.</p>
+<label>Deltagar-ID
+<input id="participant" placeholder="Skriv ditt namn">
+</label>
+<label>Kön
+<select id="gender">
+<option value="">Välj kön</option>
+<option value="Kvinna">Kvinna</option>
+<option value="Man">Man</option>
+<option value="Annat">Annat</option>
+</select>
+</label>
+<label>Ålder
+<input id="age" type="number" min="1" max="120" inputmode="numeric" placeholder="t.ex. 25">
+</label>
+<button id="startBtn">Starta nytt prov</button>
+<p class="small">Efter memoreringen kan deltagaren gå från skärmen. När 30 minuter har gått kan samma enhet öppnas igen och återgivningen fortsätter.</p>
+</section>
+
+<section id="memorize" class="panel hidden">
+<div class="top">
+<div><h2>Memorera bilden</h2><div class="small">Prov-ID: <span id="examId"></span></div></div>
+<div class="timer" id="timer">05:00</div>
+</div>
+<div class="warning">Bilden visas i högst 5 minuter. Den försvinner automatiskt när tiden tar slut.</div>
+<div id="canvas"></div>
+<br>
+<button id="finishBtn" class="danger">Jag är klar – dölj bilden</button>
+</section>
+
+<section id="wait" class="panel hidden">
+<h2>Memoreringen är avslutad</h2>
+<div class="success">
+<p>Bildinformationen är sparad.</p>
+<p><strong>Vänta 30 minuter innan återgivningen görs.</strong></p>
+<div class="timer" id="waitTimer">30:00</div>
+<p class="small" id="waitStatus">Återgivningen är låst tills tiden har gått ut.</p>
+</div>
+<p>Du kan lämna sidan. När du kommer tillbaka till <strong>samma webbläsare/enhet</strong> kan provet återupptas.</p>
+<button id="recallBtn" disabled>Återgivningen är låst i 30 minuter</button>
+<p class="small" id="waitInfo"></p>
+</section>
+
+<section id="recall" class="panel hidden">
+<h2>Återgivning</h2>
+<p>Skriv ned alla föremål du minns från bilden. Du behöver inte skriva dem i någon särskild ordning.</p>
+<textarea id="answers" rows="10" placeholder="Skriv alla föremål du minns här …"></textarea>
+<button id="submitBtn">Skicka svar</button>
+</section>
+
+<section id="done" class="panel hidden">
+<h2>Klart</h2>
+<div class="success">
+<p><strong>Dina svar är inskickade.</strong></p>
+<p>Testledaren rättar svaren manuellt. Ingen poäng visas här.</p>
+</div>
+<p><strong>Prov-ID:</strong> <span id="doneId"></span></p>
+<div class="answerbox">
+<strong>Dina svar:</strong>
+<div id="submittedAnswers"></div>
+</div>
+<p class="small">Visa gärna denna sida för testledaren om svaren ska dokumenteras manuellt.</p>
+<button id="newBtn">Nästa deltagare / nytt prov</button>
+</section>
+</main>
+
+<script>
+/* KListra in web app-URL från Google Apps Script här efter publicering. */
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzajGemg5SsB8trcM1nRuGzsepSAXAJMGRIz8Df6uOfi2rZfkJpTYEXnVEnHVNBJKpA/exec";
+
+const OBJECTS = [
+["fjärrkontroll","#37474f",`<svg viewBox="0 0 90 140"><rect x="20" y="10" width="50" height="120" rx="9" fill="currentColor"/><circle cx="45" cy="30" r="6" fill="#fff"/><circle cx="34" cy="52" r="5" fill="#fff"/><circle cx="56" cy="52" r="5" fill="#fff"/><circle cx="34" cy="70" r="5" fill="#fff"/><circle cx="56" cy="70" r="5" fill="#fff"/><rect x="32" y="90" width="26" height="18" rx="4" fill="#fff"/></svg>`],
+["cykel","#d32f2f",`<svg viewBox="0 0 120 90"><circle cx="25" cy="65" r="18" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="95" cy="65" r="18" fill="none" stroke="currentColor" stroke-width="6"/><path d="M25 65L48 30L68 65L25 65M48 30L58 65M48 30L43 20H60M68 65L78 43L95 65M78 43H91" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`],
+["tallrik","#e9edf2",`<svg viewBox="0 0 120 100"><ellipse cx="60" cy="50" rx="45" ry="34" fill="#fff" stroke="#455a64" stroke-width="5"/><ellipse cx="60" cy="50" rx="31" ry="21" fill="none" stroke="#c7cdd2" stroke-width="4"/></svg>`],
+["kopp","#8d5a3b",`<svg viewBox="0 0 120 100"><path d="M18 28H82V65Q82 82 65 82H35Q18 82 18 65Z" fill="currentColor"/><path d="M82 40H94Q105 40 105 52Q105 64 94 64H82" fill="none" stroke="currentColor" stroke-width="8"/><path d="M35 16Q30 8 36 2M52 16Q47 8 53 2M69 16Q64 8 70 2" fill="none" stroke="#777" stroke-width="4" stroke-linecap="round"/></svg>`],
+["paraply","#7b55c7",`<svg viewBox="0 0 120 120"><path d="M12 55Q60 12 108 55Q94 50 82 61Q70 50 60 61Q50 50 38 61Q26 50 12 55Z" fill="currentColor"/><path d="M60 55V96Q60 108 49 108Q39 108 39 98" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/></svg>`],
+["nyckel","#d5a52a",`<svg viewBox="0 0 130 90"><circle cx="28" cy="45" r="19" fill="none" stroke="currentColor" stroke-width="9"/><circle cx="28" cy="45" r="6" fill="#bfe8ff"/><path d="M45 45H112V31M91 45V59" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/></svg>`],
+["bok","#2878c8",`<svg viewBox="0 0 120 100"><path d="M12 18Q37 12 60 25V86Q37 73 12 80Z" fill="currentColor"/><path d="M108 18Q83 12 60 25V86Q83 73 108 80Z" fill="#43a047"/><path d="M60 25V86" stroke="#333" stroke-width="3"/><path d="M25 30H48M25 40H48M72 30H95M72 40H95" stroke="#fff" stroke-width="3" opacity=".75"/></svg>`],
+["klocka","#455a64",`<svg viewBox="0 0 90 120"><rect x="35" y="4" width="20" height="22" rx="6" fill="currentColor"/><rect x="35" y="94" width="20" height="22" rx="6" fill="currentColor"/><circle cx="45" cy="60" r="32" fill="#78909c"/><circle cx="45" cy="60" r="24" fill="#fff"/><path d="M45 60V45M45 60L57 67" stroke="#333" stroke-width="4" stroke-linecap="round"/><circle cx="45" cy="60" r="3" fill="#333"/></svg>`],
+["solglasogon","#263238",`<svg viewBox="0 0 140 80"><circle cx="38" cy="43" r="25" fill="currentColor"/><circle cx="102" cy="43" r="25" fill="currentColor"/><path d="M63 40Q70 34 77 40M13 31L4 22M127 31L136 22" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/></svg>`],
+["apple","#d83232",`<svg viewBox="0 0 100 110"><path d="M50 31Q25 16 15 40Q6 67 30 91Q50 106 70 91Q94 67 85 40Q75 16 50 31Z" fill="currentColor"/><path d="M50 30Q52 12 67 7" fill="none" stroke="#5d4037" stroke-width="6" stroke-linecap="round"/><path d="M59 17Q72 9 79 18Q68 23 59 17Z" fill="#43a047"/></svg>`],
+["banan","#f4c928",`<svg viewBox="0 0 140 100"><path d="M18 24C32 62 58 76 91 70C108 67 119 58 126 45C124 68 105 86 79 89C47 92 20 72 10 39C8 32 11 27 18 24Z" fill="currentColor" stroke="#8d6e63" stroke-width="4"/><path d="M16 25L12 17M125 45L130 40" stroke="#6d4c41" stroke-width="5" stroke-linecap="round"/></svg>`],
+["keps","#2477c7",`<svg viewBox="0 0 130 90"><path d="M24 50Q28 20 58 20Q86 20 95 49Z" fill="currentColor"/><path d="M24 50Q69 44 120 56Q90 70 24 59Z" fill="currentColor"/></svg>`],
+["sko","#8d6e63",`<svg viewBox="0 0 140 100"><path d="M16 64Q42 61 56 36L77 46Q87 62 107 66Q125 69 130 82Q132 91 118 92H22Q10 89 16 64Z" fill="currentColor"/><path d="M58 46L88 66" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>`],
+["penna","#2878c8",`<svg viewBox="0 0 160 70"><rect x="30" y="24" width="88" height="22" rx="8" fill="currentColor"/><path d="M118 24L150 35L118 46Z" fill="#9e9e9e"/><path d="M150 35L158 35" stroke="#455a64" stroke-width="3"/><rect x="42" y="18" width="7" height="34" rx="3" fill="#455a64"/><path d="M60 24V46" stroke="#fff" stroke-width="3" opacity=".8"/></svg>`],
+["kamera","#37474f",`<svg viewBox="0 0 120 90"><rect x="10" y="25" width="100" height="55" rx="9" fill="currentColor"/><path d="M30 25L38 14H68L76 25Z" fill="currentColor"/><circle cx="60" cy="52" r="20" fill="#90a4ae"/><circle cx="60" cy="52" r="11" fill="#263238"/><circle cx="88" cy="35" r="4" fill="#fff"/></svg>`],
+["flaska","#1688c7",`<svg viewBox="0 0 80 120"><path d="M31 12H49V30Q64 40 64 57V102Q64 110 56 110H24Q16 110 16 102V57Q16 40 31 30Z" fill="currentColor"/><rect x="31" y="5" width="18" height="10" rx="2" fill="#455a64"/></svg>`],
+["sax","#90a4ae",`<svg viewBox="0 0 120 110"><circle cx="35" cy="82" r="17" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="85" cy="82" r="17" fill="none" stroke="currentColor" stroke-width="8"/><path d="M38 68L75 20M82 68L45 20" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg>`],
+["lampa","#f3c623",`<svg viewBox="0 0 120 120"><path d="M26 55H94L79 20H41Z" fill="currentColor"/><path d="M60 55V94M42 103H78" stroke="#555" stroke-width="8" stroke-linecap="round"/><circle cx="60" cy="60" r="4" fill="#fff"/></svg>`],
+["telefon","#455a64",`<svg viewBox="0 0 80 130"><rect x="9" y="5" width="62" height="120" rx="10" fill="currentColor"/><rect x="16" y="18" width="48" height="85" rx="2" fill="#90caf9"/><circle cx="40" cy="114" r="5" fill="#fff"/><rect x="33" y="10" width="14" height="3" rx="2" fill="#fff" opacity=".8"/></svg>`],
+["horlurar","#7e57c2",`<svg viewBox="0 0 120 110"><path d="M25 58V43Q25 15 60 15Q95 15 95 43V58" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round"/><rect x="16" y="52" width="20" height="35" rx="8" fill="currentColor"/><rect x="84" y="52" width="20" height="35" rx="8" fill="currentColor"/></svg>`]
+];
+const names={
+cykel:"Cykel",basketboll:"Basketboll",fotboll:"Fotboll",boll:"Boll",kopp:"Kaffekopp",paraply:"Paraply",nyckel:"Nyckel",
+bok:"Bok",ryggsack:"Ryggsäck",klocka:"Armbandsur",solglasogon:"Solglasögon",apple:"Äpple",banan:"Banan",
+sked:"Sked",keps:"Keps",sko:"Sko",tandborste:"Tandborste",penna:"Penna",kamera:"Kamera",
+hammare:"Hammare",flaska:"Flaska",sax:"Sax",stol:"Stol",lampa:"Bordslampa",telefon:"Mobiltelefon",horlurar:"Hörlurar",plånbok:"Plånbok"
+};
+let exam=null,timerInt=null,selected=new Set();
+
+function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function id(){return "P-"+Date.now().toString(36).toUpperCase()+"-"+Math.random().toString(36).slice(2,8).toUpperCase()}
+function show(x){["home","memorize","wait","recall","done"].forEach(y=>document.getElementById(y).classList.toggle("hidden",x!==y));scrollTo(0,0)}
+function post(payload){
+  if(!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("KLISTRA_IN")) return;
+  fetch(APPS_SCRIPT_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload),keepalive:true}).catch(()=>{});
+}
+function start(){
+  clearInterval(timerInt);
+  const participant=document.getElementById("participant").value.trim()||"Ej angivet";
+  const gender=document.getElementById("gender").value||"";
+  const age=document.getElementById("age").value.trim()||"Ej angivet";
+  const chosen=shuffle(OBJECTS).slice(0,10);
+  const positions=[],canvas=document.getElementById("canvas");
+  canvas.innerHTML="";
+  const grid=document.createElement("div");
+  grid.className="object-grid";
+  canvas.appendChild(grid);
+
+  chosen.forEach((o,index)=>{
+    const el=document.createElement("div");
+    el.className="obj";
+    el.style.color=o[1];
+    el.innerHTML=o[2];
+    grid.appendChild(el);
+    positions.push({gridIndex:index});
+  });
+  exam={examId:id(),participantId:participant,gender,age,createdAt:new Date().toISOString(),objectIds:chosen.map(x=>x[0]),positions,viewedSeconds:0,recallAvailableAt:null};
+  localStorage.setItem("active_memory_exam",JSON.stringify(exam));
+  document.getElementById("examId").textContent=exam.examId;
+  show("memorize");runTimer(300);
+  post({action:"start",...exam});
+}
+function runTimer(n){
+  let r=n;tick(r);timerInt=setInterval(()=>{r--;exam.viewedSeconds=n-r;localStorage.setItem("active_memory_exam",JSON.stringify(exam));tick(r);if(r<=0){clearInterval(timerInt);finish()}},1000)
+}
+function tick(s){document.getElementById("timer").textContent=String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")}
+
+let waitTimerInt=null;
+
+function updateRecallAvailability(){
+  const btn = document.getElementById("recallBtn");
+  const status = document.getElementById("waitStatus");
+  const waitTimer = document.getElementById("waitTimer");
+  if(!exam || !exam.recallAvailableAt || !btn) return;
+
+  const remaining = exam.recallAvailableAt - Date.now();
+
+  if(remaining <= 0){
+    if(waitTimer) waitTimer.textContent = "00:00";
+    btn.disabled = false;
+    btn.textContent = "Öppna återgivning";
+    if(status) status.textContent = "30 minuter har gått. Du kan nu göra återgivningen.";
+    if(waitTimerInt){ clearInterval(waitTimerInt); waitTimerInt=null; }
+    return;
+  }
+
+  const totalSeconds = Math.ceil(remaining / 1000);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  if(waitTimer) waitTimer.textContent =
+    String(mins).padStart(2,"0") + ":" + String(secs).padStart(2,"0");
+
+  btn.disabled = true;
+  btn.textContent = "Återgivningen är låst";
+  if(status) status.textContent = "Du kan lämna sidan och komma tillbaka när tiden har gått ut.";
+}
+
+function startWaitCountdown(){
+  if(waitTimerInt) clearInterval(waitTimerInt);
+  updateRecallAvailability();
+  waitTimerInt=setInterval(updateRecallAvailability,1000);
+}
+
+function finish(){
+  clearInterval(timerInt);exam.viewedSeconds=Math.min(exam.viewedSeconds,300);
+  exam.recallAvailableAt=Date.now()+30*60*1000;
+  localStorage.setItem("active_memory_exam",JSON.stringify(exam));
+  document.getElementById("waitInfo").textContent="Prov-ID: "+exam.examId;
+  show("wait");
+  startWaitCountdown();
+}
+function updateRecallButton(){
+  const btn=document.getElementById("recallBtn");
+  if(!exam || !exam.recallAvailableAt){btn.disabled=true;btn.textContent="Återgivningen är låst i 30 minuter";return}
+  const ready=Date.now()>=exam.recallAvailableAt;
+  btn.disabled=!ready;
+  btn.textContent=ready?"Öppna återgivning":"Återgivningen är låst i 30 minuter";
+}
+
+function openRecall(){
+  exam=JSON.parse(localStorage.getItem("active_memory_exam")||"null");
+  if(!exam){alert("Inget aktivt prov hittades på denna enhet.");return}
+  if(Date.now()<exam.recallAvailableAt){alert("Återgivningen är inte tillgänglig ännu. Vänta tills 30 minuter har gått.");updateRecallButton();return}
+  document.getElementById("answers").value="";
+  show("recall");
+}
+function submit(){
+  const answers=document.getElementById("answers").value.trim();
+  if(!answers){alert("Skriv minst ett föremål innan du skickar in.");return}
+  const result={action:"result",examId:exam.examId,participantId:exam.participantId,gender:exam.gender,age:exam.age,createdAt:exam.createdAt,objectIds:exam.objectIds,answers,viewedSeconds:exam.viewedSeconds,resultAt:new Date().toISOString()};
+  post(result);
+  document.getElementById("doneId").textContent=exam.examId;
+  document.getElementById("submittedAnswers").textContent=answers;
+  localStorage.setItem("last_memory_result",JSON.stringify(result));
+  localStorage.removeItem("active_memory_exam");
+  show("done");
+}
+document.getElementById("startBtn").onclick=start;
+document.getElementById("finishBtn").onclick=finish;
+document.getElementById("recallBtn").onclick=openRecall;
+document.getElementById("submitBtn").onclick=submit;
+document.getElementById("newBtn").onclick=()=>{document.getElementById("participant").value="";document.getElementById("gender").value="";document.getElementById("age").value="";show("home")};
+document.addEventListener("visibilitychange",()=>{if(!document.hidden) updateRecallAvailability()});
+window.addEventListener("load",()=>{
+  const a=localStorage.getItem("active_memory_exam");
+  if(a){exam=JSON.parse(a);document.getElementById("waitInfo").textContent="Ett aktivt prov finns: "+exam.examId;show("wait");startWaitCountdown()}
+});
+</script>
+</body>
+</html>
